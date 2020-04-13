@@ -1,0 +1,6 @@
+build/
+*.pyc
+.lock-waf*
+.waf*
+/.project
+.DS_Store

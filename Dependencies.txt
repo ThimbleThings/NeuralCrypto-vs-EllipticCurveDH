@@ -1,0 +1,9 @@
+Ubuntu 16.04.6 LTS
+gcc 5.4 (should be default in 16.04.6)
+python 2.7 (should be default in 16.04.6)
+crypto++ library (sudo apt install libcrypto++-dev)
+make (sudo apt install make)
+igraph library (sudo apt install libigraph0-dev)
+boost library (sudo apt install libboost-all-dev)
+ssl library (sudo apt install libssl-dev)
+git (sudo apt install git)
