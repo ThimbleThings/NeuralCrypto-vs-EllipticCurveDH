@@ -1,0 +1,127 @@
+## -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
+
+import waflib
+import os
+import os.path
+import sys
+import string
+
+ns3_module_dependencies = ['core', 'network', 'propagation', 'mobility', 'sixlowpan', 'olsr', 'flow-monitor', 'wifi', 'wave', 'point-to-point', 'dsdv']
+
+main_file = 'main.cc'
+
+def read_waf_config(conf):
+	for line in open(os.path.join(conf.env['NS3_PATH'], '.lock-waf_' + sys.platform + '_build'), 'rt'):
+		if line.startswith('top_dir ='):
+			key, val = line.split('=')
+			top_dir = eval(val.strip())
+		if line.startswith('out_dir ='):
+			key, val = line.split('=')
+			out_dir = eval(val.strip())
+	config = waflib.ConfigSet.ConfigSet('%s/c4che/_cache.py' % out_dir)
+	
+	conf.env['NS3_BASEDIR'] = top_dir
+	conf.env['NS3_BUILDDIR'] = out_dir
+	conf.env['NS3_APPNAME'] = config['APPNAME']
+	conf.env['NS3_VERSION'] = config['VERSION']
+	conf.env['NS3_BUILD_PROFILE'] = config['BUILD_PROFILE']
+	conf.env['NS3_BUILD_SUFFIX'] = config['BUILD_SUFFIX']
+
+	return config
+
+def check_dependencies(conf, required, mandatory):
+	found = []
+	for module in required:
+		retval = conf.check_cfg(package = 'lib%s%s-%s%s' % (conf.env['NS3_APPNAME'], conf.env['NS3_VERSION'], module.lower(), conf.env['NS3_BUILD_SUFFIX']), args='--cflags --libs', mandatory=mandatory, msg="Checking for ns3-%s" % module.lower(), uselib_store='NS3_%s' % module.upper(), define_variable = {'libdir': conf.env['NS3_BUILDDIR'], 'includedir': conf.env['NS3_BUILDDIR']})
+		if not retval is None:
+			found.append(module)
+			if conf.env['LIBPATH_NS3_%s' % module.upper()]:
+				conf.env['RPATH_NS3_%s' % module.upper()] = conf.env['LIBPATH_NS3_%s' % module.upper()]
+	import copy
+	if not 'NS3_MODULES_FOUND' in conf.env:
+		conf.env['NS3_MODULES_FOUND'] = []
+	conf.env['NS3_MODULES_FOUND'] = conf.env['NS3_MODULES_FOUND'] + copy.copy(found)
+
+def modules_uselib(bld, names):
+	return ['NS3_%s' % name.upper() for name in names] + ['NS3_LIBRARY_%s' % name.upper() for name in names] + ['NS3_HEADERS_%s' % name.upper() for name in names]
+
+def options(opt):
+	sys.path.insert(0, os.path.abspath('waf-tools'))
+	opt.load('compiler_cxx boost')
+	#opt.load('compiler_cxx ssl')
+	opt.add_option('--with-ns3', help=('Path to NS3 configured and built source tree'), dest='with_ns3', default=None)
+
+def configure(conf):
+	sys.path.insert(0, os.path.abspath('waf-tools'))
+	conf.load('compiler_cxx boost')
+	#conf.load('compiler_cxx ssl')
+
+	if waflib.Options.options.with_ns3:
+		ns3_path = os.path.abspath(os.path.expanduser(waflib.Options.options.with_ns3))
+		if os.path.isdir(ns3_path):
+			conf.env['NS3_PATH'] = ns3_path
+		else:
+			print 'NS3 path is not a directory'
+			exit()
+	else:
+		print 'Missing NS3 path'
+		exit()
+
+	# read ns waf configuration
+	read_waf_config(conf)
+	
+	# collect pkg config path
+	pkg_config_path = list()
+	for root, dirs, files in os.walk(conf.env['NS3_BUILDDIR']):
+		contains_configs = False
+		for file in files:
+			if file.endswith('.pc'):
+				contains_configs = True
+		if contains_configs:
+			pkg_config_path.append(root)
+	if 'PKG_CONFIG_PATH' in os.environ:
+		pkg_config_path.append(os.environ['PKG_CONFIG_PATH'])
+	os.environ['PKG_CONFIG_PATH'] = string.join(pkg_config_path, ':')
+	
+	check_dependencies(conf, ns3_module_dependencies, mandatory = True)
+
+	conf.check_boost(lib='system regex filesystem thread iostreams', mandatory=True)
+	conf.check(lib='ssl', uselib='SSL', define_name='SSL')
+	conf.check(lib='crypto', uselib='CRYPTO', define_name='CRYPTO')
+	conf.check(lib='cryptopp', uselib='CRYPTOPP', define_name='CRYPTOPP')
+	conf.check(lib='pthread', uselib='PTHREAD', define_name='PTHREAD')
+	conf.check(lib='igraph', uselib='IGRAPH', define_name='IGRAPH')
+	conf.env.prepend_value('CXXFLAGS', ['-std=c++11'])
+	conf.env.prepend_value('CXXFLAGS', ['-ggdb'])
+	conf.env.prepend_value('CXXFLAGS', ['-g'])
+ 
+	
+
+def build(bld):
+    uselib = ['NS3_%s' % dep.upper() for dep in ns3_module_dependencies] + [
+        'CRYPTOPP',
+        'IGRAPH',
+        'BOOST',
+        'DL'
+    ]
+
+    objs = [
+	  'Utils.cc',
+	  'Client.cc',
+      'ECDH.cc',
+	  'EncryptDecrypt.cc',
+	  'Initialize.cc',
+	  'Logger.cc',
+      'NC.cc',
+	  'ReceiverApplication.cc',
+	  'SenderApplication.cc',
+	  'Server.cc'
+    ]
+
+    git_describe_commit = bld.cmd_and_log('git describe --always --dirty', 
+        output=waflib.Context.STDOUT,
+        quiet=waflib.Context.BOTH)
+    bld.define('GIT_DESCRIBE_COMMIT', git_describe_commit.strip())
+
+
+    bld.program(source=[main_file] + objs, target='main', use=uselib)

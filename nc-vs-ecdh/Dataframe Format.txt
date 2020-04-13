@@ -1,0 +1,19 @@
+
+Dataframes have the following format:
+
+| Purpose | Data |
+
+Where Purpose can be ECDH, NC, or MSG.
+Purpose and Data are separated by a ','.
+Data is specific to the Purpose and can be structured as follows:
+
+ECDH:   | State | PublicKey   |
+NC:     | State | RandomInput | OwnOutput | LastOwnOutput |
+MSG:    | State | EncryptedMessage |
+
+State can be BEGIN, UPDATE, or FINAL (left empty for MSG).
+In the case of ECDH only two packages need to be exchanged, one for BEGIN state, one for FINAL state.
+For NC several UPDATE packages are exchanged, until the RoundThreshold is reached.
+
+Once the Key Negotiation is completed a single MSG Packet with encrypted data
+is sent from the Server to the Client using the shared secret key.
