@@ -4,3 +4,4 @@ build/
 .waf*
 /.project
 .DS_Store
+.idea/
